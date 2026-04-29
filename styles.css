@@ -19,6 +19,35 @@
   --chip-selected-bg: #022c22;
 }
 
+.movie-card {
+  display: flex;
+  gap: 15px;
+  background: #111827;
+  border-radius: 12px;
+  padding: 15px;
+  margin-bottom: 15px;
+  transition: 0.3s;
+}
+
+.movie-card:hover {
+  transform: scale(1.02);
+}
+
+.movie-poster img {
+  width: 120px;
+  border-radius: 10px;
+}
+
+.movie-title {
+  font-size: 18px;
+  font-weight: bold;
+}
+
+.movie-meta {
+  color: #facc15;
+  margin: 5px 0;
+}
+
 /* LIGHT THEME OVERRIDES */
 body[data-theme="light"] {
   --bg: #f3f4f6;

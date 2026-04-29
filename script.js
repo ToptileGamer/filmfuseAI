@@ -37,6 +37,17 @@ document.addEventListener("DOMContentLoaded", () => {
   showStep(currentStep);
 });
 
+const TMDB_API_KEY = "66837c9bec5621ec5e91fdac7d4a1aac";
+
+async function getMovieDetails(title) {
+  const res = await fetch(
+    `https://api.themoviedb.org/3/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(title)}`
+  );
+
+  const data = await res.json();
+  return data.results?.[0];
+}
+
 /* ------------ THEME ICON ------------ */
 function updateThemeToggleIcon(theme) {
   const btn = document.getElementById("theme-toggle");
@@ -222,34 +233,44 @@ async function generateMovies() {
 
     // Render movie cards
     movieList.innerHTML = "";
-    movies.forEach((movie) => {
-      const card = document.createElement("div");
-      card.className = "movie-card";
-      card.innerHTML = `
-        <div class="movie-content">
-          <div class="movie-title">
-            ${movie.title}
-            ${
-              movie.year
-                ? `<span style="color:#9ca3af;"> (${movie.year})</span>`
-                : ""
-            }
-          </div>
-          <div class="movie-meta">
-            ${(movie.language || "").toUpperCase()} · Rated ${
-        movie.age_rating || "?"
-      }
-            ${
-              movie.genres && movie.genres.length
-                ? " · " + movie.genres.join(", ")
-                : ""
-            }
-          </div>
-          <div class="movie-desc">${movie.short_reason || ""}</div>
-        </div>
-      `;
-      movieList.appendChild(card);
-    });
+
+for (const movie of movies) {
+  const details = await getMovieDetails(movie.title);
+
+  const poster = details?.poster_path
+    ? `https://image.tmdb.org/t/p/w500${details.poster_path}`
+    : "";
+
+  const rating = details?.vote_average
+    ? details.vote_average.toFixed(1)
+    : "N/A";
+
+  const card = document.createElement("div");
+  card.className = "movie-card";
+
+  card.innerHTML = `
+    <div class="movie-poster">
+      ${poster ? `<img src="${poster}" />` : "No Image"}
+    </div>
+
+    <div class="movie-content">
+      <div class="movie-title">
+        ${movie.title} (${movie.year})
+      </div>
+
+      <div class="movie-meta">
+        ⭐ ${rating} / 10
+      </div>
+
+      <div class="movie-desc">
+        ${movie.short_reason}
+      </div>
+    </div>
+  `;
+
+  movieList.appendChild(card);
+}
+    
 
     scrollToResults();
   } catch (err) {
