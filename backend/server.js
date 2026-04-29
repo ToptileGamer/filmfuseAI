@@ -1,41 +1,25 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-import Groq from "groq-sdk";
+import { Groq } from "groq-sdk";
 
 dotenv.config();
 
 const app = express();
 
 // ----------------------
-// CORS CONFIGURATION (FIXED)
+// CORS CONFIGURATION
 // ----------------------
-const allowedOrigins = [
-  "http://localhost:5500",
-  "http://127.0.0.1:5500",
-  "https://filmfuse-ai.netlify.app" // ❌ removed trailing slash
-];
-
 app.use(
   cors({
-    origin: function (origin, callback) {
-      // allow requests with no origin (like Postman)
-      if (!origin) return callback(null, true);
-
-      if (allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error("Not allowed by CORS"));
-      }
-    },
-    methods: ["GET", "POST", "OPTIONS"],
-    allowedHeaders: ["Content-Type"],
-    credentials: false
+    origin: [
+      "http://localhost:5500",
+      "http://127.0.0.1:5500",
+      "https://filmfuse-ai.netlify.app", // your Netlify frontend
+    ],
+    methods: ["GET", "POST"],
   })
 );
-
-// Handle preflight requests explicitly
-app.options("*", cors());
 
 app.use(express.json());
 
@@ -47,13 +31,6 @@ const client = new Groq({
 });
 
 // ----------------------
-// HEALTH CHECK (optional but useful)
-// ----------------------
-app.get("/", (req, res) => {
-  res.send("FilmFuseAI backend is running 🚀");
-});
-
-// ----------------------
 // API ENDPOINT
 // ----------------------
 app.post("/api/recommend", async (req, res) => {
@@ -61,7 +38,7 @@ app.post("/api/recommend", async (req, res) => {
     const { languages, genres, mood, age } = req.body;
 
     const prompt = `
-Return STRICT JSON. No text.
+Return STRICT JSON. No extra text.
 
 Generate 10 movie recommendations based on:
 
@@ -96,23 +73,13 @@ Return JSON only:
       temperature: 0.6,
     });
 
-    const content = result.choices[0].message.content;
-
-    let json;
-    try {
-      json = JSON.parse(content);
-    } catch {
-      console.error("Invalid JSON from Groq:", content);
-      return res.status(500).json({
-        error: "Invalid JSON returned from AI"
-      });
-    }
+    const json = JSON.parse(result.choices[0].message.content);
 
     res.json(json);
   } catch (error) {
     console.error("Groq API error:", error);
     res.status(500).json({
-      error: "AI failed to generate valid JSON. Try again."
+      error: "AI failed to generate valid JSON. Try again.",
     });
   }
 });
