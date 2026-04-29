@@ -59,7 +59,7 @@ Return exactly:
 `;
 
     const completion = await client.chat.completions.create({
-      model: "llama-3.1-70b-versatile",
+      model: "llama-3.3-70b-versatile",
       temperature: 0.7,
       response_format: { type: "json_object" },
       messages: [
