@@ -1,25 +1,41 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-import { Groq } from "groq-sdk";
+import Groq from "groq-sdk";
 
 dotenv.config();
 
 const app = express();
 
 // ----------------------
-// CORS CONFIGURATION
+// CORS CONFIGURATION (FIXED)
 // ----------------------
+const allowedOrigins = [
+  "http://localhost:5500",
+  "http://127.0.0.1:5500",
+  "https://filmfuse-ai.netlify.app" // ❌ removed trailing slash
+];
+
 app.use(
   cors({
-    origin: [
-      "http://localhost:5500",
-      "http://127.0.0.1:5500",
-      "https://filmfuse-ai.netlify.app/", // Your Netlify frontend
-    ],
-    methods: ["GET", "POST"],
+    origin: function (origin, callback) {
+      // allow requests with no origin (like Postman)
+      if (!origin) return callback(null, true);
+
+      if (allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
+    methods: ["GET", "POST", "OPTIONS"],
+    allowedHeaders: ["Content-Type"],
+    credentials: false
   })
 );
+
+// Handle preflight requests explicitly
+app.options("*", cors());
 
 app.use(express.json());
 
@@ -28,6 +44,13 @@ app.use(express.json());
 // ----------------------
 const client = new Groq({
   apiKey: process.env.GROQ_API_KEY,
+});
+
+// ----------------------
+// HEALTH CHECK (optional but useful)
+// ----------------------
+app.get("/", (req, res) => {
+  res.send("FilmFuseAI backend is running 🚀");
 });
 
 // ----------------------
@@ -73,7 +96,17 @@ Return JSON only:
       temperature: 0.6,
     });
 
-    const json = JSON.parse(result.choices[0].message.content);
+    const content = result.choices[0].message.content;
+
+    let json;
+    try {
+      json = JSON.parse(content);
+    } catch {
+      console.error("Invalid JSON from Groq:", content);
+      return res.status(500).json({
+        error: "Invalid JSON returned from AI"
+      });
+    }
 
     res.json(json);
   } catch (error) {
