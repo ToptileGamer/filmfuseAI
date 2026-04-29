@@ -31,9 +31,7 @@ Return STRICT JSON only.
 IMPORTANT RULES:
 - Recommend ONLY movies from 1990 to 2026
 - STRONGLY prefer latest movies (2020 ,2021, 2022, 2023, 2024, 2025, 2026)
-- Do NOT include old/classic movies
-- Movies must be REAL and popular or trending
-- Match user's preferences carefully
+
 
 USER PREFERENCES:
 Languages: ${languages}
