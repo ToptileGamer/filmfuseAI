@@ -8,14 +8,14 @@ dotenv.config();
 const app = express();
 
 // ----------------------
-// CORS CONFIG
+// CORS CONFIGURATION
 // ----------------------
 app.use(
   cors({
     origin: [
-      "http://localhost:5500",     // Local frontend
+      "http://localhost:5500",
       "http://127.0.0.1:5500",
-      process.env.FRONTEND_URL     // Netlify URL (set this in Render env vars)
+      "https://filmfuse-ai.netlify.app/", // Your Netlify frontend
     ],
     methods: ["GET", "POST"],
   })
@@ -31,61 +31,63 @@ const client = new Groq({
 });
 
 // ----------------------
-// API ROUTE
+// API ENDPOINT
 // ----------------------
 app.post("/api/recommend", async (req, res) => {
   try {
-    const { languages, genres, moods, age } = req.body;
+    const { languages, genres, mood, age } = req.body;
 
     const prompt = `
-Generate a JSON list of 10 movies based on:
+Return STRICT JSON. No text.
+
+Generate 10 movie recommendations based on:
 
 Languages: ${languages}
 Genres: ${genres}
-Moods: ${moods}
+Mood: ${mood}
 Age Rating: ${age}
 
-Return STRICT JSON (no markdown, no commentary):
-
+Return JSON only:
 {
-  "movies": [
-    {
-      "title": "",
-      "year": "",
-      "language": "",
-      "age_rating": "",
-      "genres": [],
-      "mood_tags": [],
-      "short_reason": ""
-    }
-  ]
+ "movies": [
+   {
+     "title": "",
+     "year": "",
+     "language": "",
+     "age_rating": "",
+     "genres": [],
+     "mood_tags": [],
+     "short_reason": ""
+   }
+ ]
 }
 `;
 
-    const response = await client.chat.completions.create({
-      model: "llama3-8b-8192",
+    const result = await client.chat.completions.create({
+      model: "llama-3.1-70b-versatile",
+      response_format: { type: "json_object" },
       messages: [
-        { role: "system", content: "Return ONLY valid JSON." },
-        { role: "user", content: prompt }
+        { role: "system", content: "You must ALWAYS return valid JSON only." },
+        { role: "user", content: prompt },
       ],
-      temperature: 0.7,
-      response_format: { type: "json_object" }   // Forces valid JSON output
+      temperature: 0.6,
     });
 
-    const json = JSON.parse(response.choices[0].message.content);
+    const json = JSON.parse(result.choices[0].message.content);
 
     res.json(json);
-
-  } catch (err) {
-    console.error("Groq API error:", err);
-    res.status(500).json({ error: "AI failed to generate recommendations." });
+  } catch (error) {
+    console.error("Groq API error:", error);
+    res.status(500).json({
+      error: "AI failed to generate valid JSON. Try again."
+    });
   }
 });
 
 // ----------------------
-// PORT CONFIG (IMPORTANT)
+// PORT
 // ----------------------
-const PORT = process.env.PORT || 4000;  // <-- Render will auto-set PORT
+const PORT = process.env.PORT || 4000;
 
 app.listen(PORT, () => {
   console.log(`FilmFuseAI backend running on port ${PORT}`);
