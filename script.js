@@ -48,47 +48,6 @@ async function getMovieDetails(title) {
   return data.results?.[0];
 }
 
-import { signup, login, logout, auth, saveWatchlist } from "./firebase.js";
-
-window.handleSignup = async () => {
-  const email = document.getElementById("email").value;
-  const pass = document.getElementById("password").value;
-
-  await signup(email, pass);
-  alert("Account created!");
-};
-
-window.handleLogin = async () => {
-  const email = document.getElementById("email").value;
-  const pass = document.getElementById("password").value;
-
-  await login(email, pass);
-  alert("Logged in!");
-};
-
-window.handleLogout = () => {
-  logout();
-  alert("Logged out!");
-};
-
-import { auth, saveWatchlist } from "./firebase.js";
-
-const user = auth.currentUser;
-
-if (user) {
-  await saveWatchlist(user.uid, movies);
-}
-
-import { getWatchlist } from "./firebase.js";
-
-async function loadSaved() {
-  const user = auth.currentUser;
-  if (!user) return;
-
-  const lists = await getWatchlist(user.uid);
-  console.log(lists);
-}
-
 /* ------------ THEME ICON ------------ */
 function updateThemeToggleIcon(theme) {
   const btn = document.getElementById("theme-toggle");
