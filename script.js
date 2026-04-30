@@ -1,92 +1,330 @@
-import {
-  signup,
-  login,
-  logout,
-  auth,
-  saveWatchlist,
-  getWatchlist
-} from "./firebase.js";
+// =======================
+// FilmFuseAI - script.js
+// =======================
+
+// Multi-step state
+let currentStep = 1;
+const totalSteps = 4;
+
+document.addEventListener("DOMContentLoaded", () => {
+  // Footer year
+  const yearEl = document.getElementById("year");
+  if (yearEl) yearEl.textContent = new Date().getFullYear();
+
+  // Theme init from localStorage
+  const storedTheme = localStorage.getItem("filmfuse-theme");
+  if (storedTheme === "light" || storedTheme === "dark") {
+    document.body.setAttribute("data-theme", storedTheme);
+    updateThemeToggleIcon(storedTheme);
+  }
+
+  // Theme toggle
+  const themeToggle = document.getElementById("theme-toggle");
+  if (themeToggle) {
+    themeToggle.addEventListener("click", () => {
+      const current = document.body.getAttribute("data-theme") || "dark";
+      const next = current === "dark" ? "light" : "dark";
+      document.body.setAttribute("data-theme", next);
+      localStorage.setItem("filmfuse-theme", next);
+      updateThemeToggleIcon(next);
+    });
+  }
+
+  // Chips behaviour
+  setupChipSelection();
+
+  // Show first step with staggered animation
+  showStep(currentStep);
+});
 
 const TMDB_API_KEY = "66837c9bec5621ec5e91fdac7d4a1aac";
 
-// AUTH
-window.handleSignup = async () => {
-  await signup(email.value, password.value);
-  alert("Signup successful");
-};
-
-window.handleLogin = async () => {
-  await login(email.value, password.value);
-  alert("Logged in");
-};
-
-window.handleLogout = async () => {
-  await logout();
-  alert("Logged out");
-};
-
-// TMDB
 async function getMovieDetails(title) {
   const res = await fetch(
     `https://api.themoviedb.org/3/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(title)}`
   );
+
   const data = await res.json();
   return data.results?.[0];
 }
 
-// GENERATE
-window.generateMovies = async () => {
-  const movieList = document.getElementById("movieList");
-  movieList.innerHTML = "Loading...";
+import { signup, login, logout, auth, saveWatchlist } from "./firebase.js";
 
-  const res = await fetch("/.netlify/functions/recommend", {
-    method: "POST"
+window.handleSignup = async () => {
+  const email = document.getElementById("email").value;
+  const pass = document.getElementById("password").value;
+
+  await signup(email, pass);
+  alert("Account created!");
+};
+
+window.handleLogin = async () => {
+  const email = document.getElementById("email").value;
+  const pass = document.getElementById("password").value;
+
+  await login(email, pass);
+  alert("Logged in!");
+};
+
+window.handleLogout = () => {
+  logout();
+  alert("Logged out!");
+};
+
+import { auth, saveWatchlist } from "./firebase.js";
+
+const user = auth.currentUser;
+
+if (user) {
+  await saveWatchlist(user.uid, movies);
+}
+
+import { getWatchlist } from "./firebase.js";
+
+async function loadSaved() {
+  const user = auth.currentUser;
+  if (!user) return;
+
+  const lists = await getWatchlist(user.uid);
+  console.log(lists);
+}
+
+/* ------------ THEME ICON ------------ */
+function updateThemeToggleIcon(theme) {
+  const btn = document.getElementById("theme-toggle");
+  if (!btn) return;
+  btn.textContent = theme === "dark" ? "🌙" : "☀️";
+}
+
+/* ------------ CHIP SELECTION LOGIC ------------ */
+function setupChipSelection() {
+  document.querySelectorAll(".options").forEach((container) => {
+    const single = container.classList.contains("single-select");
+
+    container.querySelectorAll(".chip").forEach((chip) => {
+      chip.addEventListener("click", () => {
+        if (single) {
+          // Only one can be active in this group
+          container.querySelectorAll(".chip").forEach((c) =>
+            c.classList.remove("selected")
+          );
+          chip.classList.add("selected");
+        } else {
+          chip.classList.toggle("selected");
+        }
+      });
+    });
+  });
+}
+
+/* ------------ MULTI-STEP WIZARD ------------ */
+function showStep(step) {
+  currentStep = step;
+
+  // Toggle step visibility
+  document.querySelectorAll(".form-step").forEach((stepEl) => {
+    const s = Number(stepEl.getAttribute("data-step"));
+    stepEl.classList.toggle("active", s === step);
   });
 
-  const data = await res.json();
-  const movies = data.movies;
+  // Update dots
+  document.querySelectorAll("[data-step-dot]").forEach((dot) => {
+    const s = Number(dot.getAttribute("data-step-dot"));
+    dot.classList.toggle("active", s === step);
+  });
 
-  movieList.innerHTML = "";
+  // Step number text
+  const stepNumEl = document.getElementById("step-number");
+  if (stepNumEl) stepNumEl.textContent = String(step);
 
-  for (const m of movies) {
-    const d = await getMovieDetails(m.title);
+  // Staggered animation for fields inside the active step
+  const activeStep = document.querySelector(`.form-step[data-step="${step}"]`);
+  if (activeStep) {
+    const fields = activeStep.querySelectorAll(".field");
+    fields.forEach((field, idx) => {
+      field.classList.remove("visible");
+      setTimeout(() => field.classList.add("visible"), idx * 180);
+    });
+  }
 
-    const poster = d?.poster_path
-      ? `https://image.tmdb.org/t/p/w500${d.poster_path}`
-      : "";
+  // Scroll panel into view (mobile)
+  const panel = document.getElementById("form-panel");
+  if (panel) {
+    panel.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+}
 
-    const rating = d?.vote_average || "N/A";
+function nextStep() {
+  if (currentStep < totalSteps) {
+    showStep(currentStep + 1);
+  }
+}
 
-    movieList.innerHTML += `
-      <div class="movie-card">
-        <img src="${poster}">
-        <div>
-          <h3>${m.title} (${m.year})</h3>
-          <p>⭐ ${rating}</p>
-          <p>${m.short_reason}</p>
+function prevStep() {
+  if (currentStep > 1) {
+    showStep(currentStep - 1);
+  }
+}
+
+/* ------------ SCROLL HELPERS ------------ */
+function scrollToForm() {
+  const panel = document.getElementById("form-panel");
+  if (panel) {
+    panel.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+}
+
+function scrollToResults() {
+  const section = document.getElementById("results");
+  if (section) {
+    section.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+}
+
+/* ------------ SKELETON SHIMMER UI ------------ */
+function createSkeletonHTML(count) {
+  let html = "";
+  for (let i = 0; i < count; i++) {
+    html += `
+      <div class="skeleton-card">
+        <div class="skeleton-lines">
+          <div class="skeleton-line" style="width:70%;"></div>
+          <div class="skeleton-line" style="width:55%;"></div>
+          <div class="skeleton-line" style="width:90%;"></div>
         </div>
       </div>
     `;
   }
+  return html;
+}
 
-  // SAVE
-  if (auth.currentUser) {
-    await saveWatchlist(auth.currentUser.uid, movies);
+/* ------------ GROQ BACKEND CALL (Netlify Function) ------------ */
+async function generateMovies() {
+  // Helper to get selected chip values
+  const getSelectedList = (id) => {
+    const container = document.getElementById(id);
+    if (!container) return [];
+    return Array.from(container.querySelectorAll(".chip.selected")).map((c) =>
+      c.textContent.trim().toLowerCase()
+    );
+  };
+
+  const languages = getSelectedList("langs");
+  const genres = getSelectedList("genres");
+  const moodList = getSelectedList("mood");
+  const ageList = getSelectedList("age");
+
+  const payload = {
+    languages,
+    genres,
+    mood: moodList[0] || null,
+    age: ageList[0] || null,
+  };
+
+  // Update summary pills above results
+  const summary = document.getElementById("query-summary");
+  if (summary) {
+    summary.innerHTML = `
+      <span class="query-pill">Lang: ${
+        languages.length ? languages.join(", ") : "any"
+      }</span>
+      <span class="query-pill">Genres: ${
+        genres.length ? genres.join(", ") : "any"
+      }</span>
+      <span class="query-pill">Mood: ${payload.mood || "any"}</span>
+      <span class="query-pill">Age: ${payload.age || "any"}</span>
+    `;
   }
-};
-
-// LOAD SAVED
-window.loadSaved = async () => {
-  if (!auth.currentUser) return alert("Login first");
-
-  const lists = await getWatchlist(auth.currentUser.uid);
 
   const movieList = document.getElementById("movieList");
-  movieList.innerHTML = "<h2>Saved</h2>";
+  if (!movieList) return;
 
-  lists.forEach(list => {
-    list.movies.forEach(m => {
-      movieList.innerHTML += `<p>${m.title}</p>`;
+  // Show skeleton loaders while waiting
+  movieList.innerHTML = createSkeletonHTML(3);
+
+  try {
+    // Decide which URL to call:
+    // - Netlify site or Netlify Dev (localhost:8888): use relative path
+    // - Static local preview (127.0.0.1:5500 etc.): call the deployed backend
+    const isNetlifyEnv =
+      location.hostname.endsWith("netlify.app") || location.port === "8888";
+
+    const endpoint = isNetlifyEnv
+      ? "/.netlify/functions/recommend"
+      : "https://filmfuseai.netlify.app/.netlify/functions/recommend";
+
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
     });
-  });
-};
+
+    if (!res.ok) {
+      const errBody = await res.json().catch(() => ({}));
+      throw new Error(errBody.error || `Backend error (${res.status})`);
+    }
+
+    const data = await res.json();
+    const movies = data.movies || [];
+
+    if (!movies.length) {
+      movieList.innerHTML = `<p class="placeholder">No movies returned. Try tweaking your preferences and generate again.</p>`;
+      return;
+    }
+
+    // Render movie cards
+    movieList.innerHTML = "";
+
+for (const movie of movies) {
+  const details = await getMovieDetails(movie.title);
+
+  const poster = details?.poster_path
+    ? `https://image.tmdb.org/t/p/w500${details.poster_path}`
+    : "";
+
+  const rating = details?.vote_average
+    ? details.vote_average.toFixed(1)
+    : "N/A";
+
+  const card = document.createElement("div");
+  card.className = "movie-card";
+
+  card.innerHTML = `
+    <div class="movie-poster">
+      ${poster ? `<img src="${poster}" />` : "No Image"}
+    </div>
+
+    <div class="movie-content">
+      <div class="movie-title">
+        ${movie.title} (${movie.year})
+      </div>
+
+      <div class="movie-meta">
+        ⭐ ${rating} / 10
+      </div>
+
+      <div class="movie-desc">
+        ${movie.short_reason}
+      </div>
+    </div>
+  `;
+
+  movieList.appendChild(card);
+}
+    
+
+    scrollToResults();
+  } catch (err) {
+    console.error("Error in generateMovies:", err);
+    movieList.innerHTML = `<p class="placeholder" style="color:#ef4444;">Error: ${
+      err.message || "AI failed to generate recommendations."
+    }</p>`;
+  }
+}
+
+/* ------------ EXPOSE FUNCTIONS TO HTML (onclick) ------------ */
+window.scrollToForm = scrollToForm;
+window.scrollToResults = scrollToResults;
+window.nextStep = nextStep;
+window.prevStep = prevStep;
+window.generateMovies = generateMovies;
