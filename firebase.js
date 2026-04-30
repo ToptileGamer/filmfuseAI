@@ -4,10 +4,7 @@ import {
   getAuth,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
-  signOut,
-  GoogleAuthProvider,
-  signInWithPopup,
-  onAuthStateChanged
+  signOut
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
 import {
@@ -28,7 +25,6 @@ const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 
-// EMAIL AUTH
 export const signup = (email, pass) =>
   createUserWithEmailAndPassword(auth, email, pass);
 
@@ -37,18 +33,6 @@ export const login = (email, pass) =>
 
 export const logout = () => signOut(auth);
 
-// GOOGLE AUTH
-export async function loginWithGoogle() {
-  const provider = new GoogleAuthProvider();
-  return signInWithPopup(auth, provider);
-}
-
-// AUTH STATE
-export function observeAuth(callback) {
-  onAuthStateChanged(auth, callback);
-}
-
-// SAVE WATCHLIST
 export async function saveWatchlist(uid, movies) {
   await addDoc(collection(db, "watchlists"), {
     uid,
@@ -57,8 +41,9 @@ export async function saveWatchlist(uid, movies) {
   });
 }
 
-// GET WATCHLIST
 export async function getWatchlist(uid) {
   const snap = await getDocs(collection(db, "watchlists"));
-  return snap.docs.map(d => d.data()).filter(x => x.uid === uid);
+  return snap.docs
+    .map(d => d.data())
+    .filter(x => x.uid === uid);
 }
