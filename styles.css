@@ -819,8 +819,13 @@ body[data-theme="light"] .movie-card { background: #ffffff; border-color: #e5e7e
 
 .movie-card:hover {
   transform: translateY(-1px);
-  border-color: var(--accent);
+  border-color: rgba(34,197,94,0.5);
   box-shadow: 0 12px 32px rgba(15, 23, 42, 0.85);
+}
+
+.movie-poster {
+  flex-shrink: 0;
+  align-self: flex-start;
 }
 
 .movie-poster img {
@@ -844,9 +849,164 @@ body[data-theme="light"] .movie-card { background: #ffffff; border-color: #e5e7e
 body[data-theme="light"] .movie-poster-placeholder { background: #f3f4f6; }
 
 .movie-content { flex: 1; min-width: 0; }
-.movie-title { font-size: 14px; font-weight: 600; }
+.movie-title { font-size: 14px; font-weight: 600; cursor: pointer; }
+.movie-title:hover { color: var(--accent-soft); }
+.movie-year { font-weight: 400; color: var(--text-muted); }
 .movie-meta { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
 .movie-desc { font-size: 12px; color: var(--text-soft); margin-top: 6px; line-height: 1.5; }
+
+/* expand hint */
+.expand-hint {
+  font-size: 10px;
+  color: var(--accent);
+  opacity: 0.7;
+  transition: opacity 0.15s;
+}
+.movie-click-trigger:hover + * .expand-hint,
+.movie-card:hover .expand-hint {
+  opacity: 1;
+}
+
+/* ================================================================
+   EXPANDABLE DRAWER (cast + OTT)
+================================================================ */
+.movie-drawer {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-soft);
+  animation: stepFade 0.25s ease-out;
+}
+
+.drawer-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 4px 0;
+}
+
+/* spinner */
+.drawer-spinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  animation: spin 0.7s linear infinite;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.drawer-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.drawer-director {
+  font-size: 12px;
+  color: var(--text-soft);
+}
+
+.drawer-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin-bottom: 5px;
+}
+
+.drawer-value {
+  color: var(--accent-soft);
+  font-weight: 600;
+}
+
+.drawer-muted {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.drawer-error {
+  font-size: 12px;
+  color: #ef4444;
+  padding: 4px 0;
+}
+
+/* CAST PILLS */
+.drawer-cast {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.cast-pill {
+  font-size: 11px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(15, 23, 42, 0.7);
+  color: var(--text-soft);
+  white-space: nowrap;
+}
+
+body[data-theme="light"] .cast-pill {
+  background: #f3f4f6;
+}
+
+/* OTT BADGES */
+.drawer-ott {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.ott-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px 5px 7px;
+  border-radius: 8px;
+  background: var(--ott-color, #334155);
+  text-decoration: none;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 600;
+  transition: transform 0.1s, box-shadow 0.15s, filter 0.15s;
+  white-space: nowrap;
+}
+
+.ott-badge:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.15);
+  box-shadow: 0 4px 14px rgba(0,0,0,0.5);
+}
+
+.ott-logo {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  object-fit: contain;
+  display: block;
+}
+
+.ott-icon {
+  font-size: 11px;
+  font-weight: 800;
+  min-width: 18px;
+  text-align: center;
+}
+
+/* expanded card border accent */
+.card-expanded {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 1px rgba(34,197,94,0.2);
+}
 
 /* ================================================================
    FOOTER
