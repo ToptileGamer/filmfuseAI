@@ -66,7 +66,8 @@ function initAuth() {
   });
 
   netlifyIdentity.on("error", (err) => {
-    showAuthError(err.message || "Authentication error. Please try again.");
+    // Log only — don't touch DOM here; Netlify Identity renders its own error UI
+    console.warn("Netlify Identity error:", err.message);
   });
 
   netlifyIdentity.init({ locale: "en" });
@@ -86,7 +87,8 @@ function setLoggedInState(user) {
   const pill = document.getElementById("user-pill");
   pill?.classList.remove("hidden");
   document.getElementById("user-avatar").textContent = initials;
-  document.getElementById("user-name-label").textContent = name.split(" ")[0];
+  const nameEl = document.getElementById("user-name") || document.getElementById("user-name-label");
+  if (nameEl) nameEl.textContent = name.split(" ")[0];
 
   // Show wishlist nav link
   document.getElementById("wishlist-nav-link")?.classList.remove("hidden");
