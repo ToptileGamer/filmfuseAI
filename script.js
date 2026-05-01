@@ -6,67 +6,349 @@
 let currentStep = 1;
 const totalSteps = 4;
 
+// Auth state
+let currentUser = null;
+
+// ============================================================
+// INIT
+// ============================================================
 document.addEventListener("DOMContentLoaded", () => {
   // Footer year
   const yearEl = document.getElementById("year");
   if (yearEl) yearEl.textContent = new Date().getFullYear();
 
-  // Theme init from localStorage
+  // Theme
   const storedTheme = localStorage.getItem("filmfuse-theme");
   if (storedTheme === "light" || storedTheme === "dark") {
     document.body.setAttribute("data-theme", storedTheme);
     updateThemeToggleIcon(storedTheme);
   }
 
-  // Theme toggle
-  const themeToggle = document.getElementById("theme-toggle");
-  if (themeToggle) {
-    themeToggle.addEventListener("click", () => {
-      const current = document.body.getAttribute("data-theme") || "dark";
-      const next = current === "dark" ? "light" : "dark";
-      document.body.setAttribute("data-theme", next);
-      localStorage.setItem("filmfuse-theme", next);
-      updateThemeToggleIcon(next);
+  document.getElementById("theme-toggle")?.addEventListener("click", () => {
+    const current = document.body.getAttribute("data-theme") || "dark";
+    const next = current === "dark" ? "light" : "dark";
+    document.body.setAttribute("data-theme", next);
+    localStorage.setItem("filmfuse-theme", next);
+    updateThemeToggleIcon(next);
+  });
+
+  // Chips
+  setupChipSelection();
+
+  // Step 1
+  showStep(currentStep);
+
+  // Netlify Identity
+  initAuth();
+});
+
+// ============================================================
+// NETLIFY IDENTITY AUTH
+// ============================================================
+function initAuth() {
+  if (typeof netlifyIdentity === "undefined") {
+    console.warn("Netlify Identity not loaded. Auth disabled.");
+    return;
+  }
+
+  netlifyIdentity.on("init", (user) => {
+    if (user) setLoggedInState(user);
+  });
+
+  netlifyIdentity.on("login", (user) => {
+    setLoggedInState(user);
+    netlifyIdentity.close();
+    closeAuthModal();
+  });
+
+  netlifyIdentity.on("logout", () => {
+    setLoggedOutState();
+  });
+
+  netlifyIdentity.on("error", (err) => {
+    showAuthError(err.message || "Authentication error. Please try again.");
+  });
+
+  netlifyIdentity.init({ locale: "en" });
+}
+
+function setLoggedInState(user) {
+  currentUser = user;
+  const name = user.user_metadata?.full_name || user.email || "User";
+  const initials = name
+    .split(" ")
+    .map((w) => w[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
+
+  document.getElementById("auth-btn-login")?.classList.add("hidden");
+  const pill = document.getElementById("user-pill");
+  pill?.classList.remove("hidden");
+  document.getElementById("user-avatar").textContent = initials;
+  document.getElementById("user-name-label").textContent = name.split(" ")[0];
+
+  // Show wishlist nav link
+  document.getElementById("wishlist-nav-link")?.classList.remove("hidden");
+  document.getElementById("wishlist")?.classList.remove("hidden");
+
+  renderWishlist();
+}
+
+function setLoggedOutState() {
+  currentUser = null;
+  document.getElementById("auth-btn-login")?.classList.remove("hidden");
+  document.getElementById("user-pill")?.classList.add("hidden");
+  document.getElementById("wishlist-nav-link")?.classList.add("hidden");
+  document.getElementById("wishlist")?.classList.add("hidden");
+}
+
+function handleLogout() {
+  if (typeof netlifyIdentity !== "undefined") {
+    netlifyIdentity.logout();
+  }
+}
+
+// ============================================================
+// AUTH MODAL (wraps Netlify Identity widget)
+// ============================================================
+function openAuthModal() {
+  // If Netlify Identity is available, delegate to it directly
+  if (typeof netlifyIdentity !== "undefined") {
+    netlifyIdentity.open("login");
+    return;
+  }
+  // Fallback: show custom modal
+  document.getElementById("auth-modal")?.classList.remove("hidden");
+}
+
+function closeAuthModal() {
+  document.getElementById("auth-modal")?.classList.add("hidden");
+  clearAuthMessages();
+}
+
+function switchAuthTab(tab) {
+  document.getElementById("tab-login").classList.toggle("active", tab === "login");
+  document.getElementById("tab-signup").classList.toggle("active", tab === "signup");
+  document.getElementById("auth-login").classList.toggle("active", tab === "login");
+  document.getElementById("auth-signup").classList.toggle("active", tab === "signup");
+  clearAuthMessages();
+}
+
+function showAuthError(msg) {
+  const el = document.getElementById("auth-error");
+  if (!el) return;
+  el.textContent = msg;
+  el.classList.remove("hidden");
+}
+
+function showAuthMessage(msg) {
+  const el = document.getElementById("auth-message");
+  if (!el) return;
+  el.textContent = msg;
+  el.classList.remove("hidden");
+}
+
+function clearAuthMessages() {
+  document.getElementById("auth-error")?.classList.add("hidden");
+  document.getElementById("auth-message")?.classList.add("hidden");
+}
+
+// Netlify Identity handles actual login/signup; these fallbacks used
+// only when Netlify Identity widget isn't available (local testing)
+async function handleLogin() {
+  if (typeof netlifyIdentity !== "undefined") {
+    netlifyIdentity.open("login");
+    return;
+  }
+  showAuthError("Auth service unavailable. Please deploy to Netlify.");
+}
+
+async function handleSignup() {
+  if (typeof netlifyIdentity !== "undefined") {
+    netlifyIdentity.open("signup");
+    return;
+  }
+  showAuthError("Auth service unavailable. Please deploy to Netlify.");
+}
+
+function handleForgotPassword() {
+  if (typeof netlifyIdentity !== "undefined") {
+    netlifyIdentity.open("recovery");
+  }
+}
+
+// ============================================================
+// BOOKMARKS / WISHLIST
+// ============================================================
+function getBookmarkKey() {
+  if (!currentUser) return null;
+  return `filmfuse-wishlist-${currentUser.id}`;
+}
+
+function getBookmarks() {
+  const key = getBookmarkKey();
+  if (!key) return [];
+  try {
+    return JSON.parse(localStorage.getItem(key) || "[]");
+  } catch {
+    return [];
+  }
+}
+
+function saveBookmarks(list) {
+  const key = getBookmarkKey();
+  if (!key) return;
+  localStorage.setItem(key, JSON.stringify(list));
+}
+
+function isBookmarked(title) {
+  return getBookmarks().some((m) => m.title === title);
+}
+
+function toggleBookmark(movie) {
+  if (!currentUser) {
+    openAuthModal();
+    return;
+  }
+  const list = getBookmarks();
+  const idx = list.findIndex((m) => m.title === movie.title);
+  if (idx === -1) {
+    list.push(movie);
+  } else {
+    list.splice(idx, 1);
+  }
+  saveBookmarks(list);
+
+  // Re-sync bookmark buttons in results
+  refreshBookmarkButtons();
+  renderWishlist();
+}
+
+function clearWishlist() {
+  if (!currentUser) return;
+  saveBookmarks([]);
+  renderWishlist();
+  refreshBookmarkButtons();
+}
+
+function renderWishlist() {
+  const container = document.getElementById("wishlistMovies");
+  if (!container) return;
+
+  const list = getBookmarks();
+
+  if (!list.length) {
+    container.innerHTML = `<p class="placeholder">Bookmark movies from your recommendations to see them here.</p>`;
+    return;
+  }
+
+  container.innerHTML = "";
+  list.forEach((movie) => {
+    const card = buildMovieCard(movie, true);
+    container.appendChild(card);
+  });
+}
+
+function refreshBookmarkButtons() {
+  document.querySelectorAll(".bookmark-btn").forEach((btn) => {
+    const title = btn.dataset.title;
+    const saved = isBookmarked(title);
+    btn.classList.toggle("bookmarked", saved);
+    btn.title = saved ? "Remove from wishlist" : "Add to wishlist";
+    btn.querySelector(".bm-icon").textContent = saved ? "★" : "☆";
+  });
+}
+
+// ============================================================
+// MOVIE CARD BUILDER (shared for results + wishlist)
+// ============================================================
+function buildMovieCard(movie, inWishlist = false) {
+  const card = document.createElement("div");
+  card.className = "movie-card";
+
+  const poster = movie.poster
+    ? `<img src="${movie.poster}" alt="${movie.title} poster" />`
+    : `<div class="movie-poster-placeholder">🎬</div>`;
+
+  const saved = isBookmarked(movie.title);
+  const bmClass = saved ? "bookmark-btn bookmarked" : "bookmark-btn";
+  const bmIcon = saved ? "★" : "☆";
+  const bmTitle = saved ? "Remove from wishlist" : "Add to wishlist";
+
+  card.innerHTML = `
+    <div class="movie-poster">${poster}</div>
+    <div class="movie-content">
+      <div class="movie-title-row">
+        <div class="movie-title">${movie.title} (${movie.year})</div>
+        ${
+          currentUser
+            ? `<button class="${bmClass}" data-title="${movie.title}" title="${bmTitle}">
+                <span class="bm-icon">${bmIcon}</span>
+               </button>`
+            : `<button class="bookmark-btn bookmark-btn-hint" title="Sign in to bookmark" onclick="openAuthModal()">
+                <span class="bm-icon">☆</span>
+               </button>`
+        }
+      </div>
+      <div class="movie-meta">⭐ ${movie.rating || "N/A"} / 10</div>
+      <div class="movie-desc">${movie.short_reason}</div>
+    </div>
+  `;
+
+  // Wire up bookmark button
+  const bmBtn = card.querySelector(".bookmark-btn:not(.bookmark-btn-hint)");
+  if (bmBtn) {
+    bmBtn.addEventListener("click", () => {
+      toggleBookmark(movie);
+      if (inWishlist) {
+        card.remove();
+        if (!getBookmarks().length) {
+          document.getElementById("wishlistMovies").innerHTML =
+            `<p class="placeholder">Bookmark movies from your recommendations to see them here.</p>`;
+        }
+      }
     });
   }
 
-  // Chips behaviour
-  setupChipSelection();
+  return card;
+}
 
-  // Show first step with staggered animation
-  showStep(currentStep);
-});
-
+// ============================================================
+// TMDB
+// ============================================================
 const TMDB_API_KEY = "66837c9bec5621ec5e91fdac7d4a1aac";
 
 async function getMovieDetails(title) {
-  const res = await fetch(
-    `https://api.themoviedb.org/3/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(title)}`
-  );
-
-  const data = await res.json();
-  return data.results?.[0];
+  try {
+    const res = await fetch(
+      `https://api.themoviedb.org/3/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(title)}`
+    );
+    const data = await res.json();
+    return data.results?.[0];
+  } catch {
+    return null;
+  }
 }
 
-/* ------------ THEME ICON ------------ */
+// ============================================================
+// THEME
+// ============================================================
 function updateThemeToggleIcon(theme) {
   const btn = document.getElementById("theme-toggle");
-  if (!btn) return;
-  btn.textContent = theme === "dark" ? "🌙" : "☀️";
+  if (btn) btn.textContent = theme === "dark" ? "🌙" : "☀️";
 }
 
-/* ------------ CHIP SELECTION LOGIC ------------ */
+// ============================================================
+// CHIP SELECTION
+// ============================================================
 function setupChipSelection() {
   document.querySelectorAll(".options").forEach((container) => {
     const single = container.classList.contains("single-select");
-
     container.querySelectorAll(".chip").forEach((chip) => {
       chip.addEventListener("click", () => {
         if (single) {
-          // Only one can be active in this group
-          container.querySelectorAll(".chip").forEach((c) =>
-            c.classList.remove("selected")
-          );
+          container.querySelectorAll(".chip").forEach((c) => c.classList.remove("selected"));
           chip.classList.add("selected");
         } else {
           chip.classList.toggle("selected");
@@ -76,90 +358,77 @@ function setupChipSelection() {
   });
 }
 
-/* ------------ MULTI-STEP WIZARD ------------ */
+// ============================================================
+// MULTI-STEP WIZARD
+// ============================================================
 function showStep(step) {
   currentStep = step;
 
-  // Toggle step visibility
-  document.querySelectorAll(".form-step").forEach((stepEl) => {
-    const s = Number(stepEl.getAttribute("data-step"));
-    stepEl.classList.toggle("active", s === step);
+  document.querySelectorAll(".form-step").forEach((el) => {
+    el.classList.toggle("active", Number(el.dataset.step) === step);
   });
 
-  // Update dots
   document.querySelectorAll("[data-step-dot]").forEach((dot) => {
-    const s = Number(dot.getAttribute("data-step-dot"));
-    dot.classList.toggle("active", s === step);
+    dot.classList.toggle("active", Number(dot.dataset.stepDot) === step);
   });
 
-  // Step number text
   const stepNumEl = document.getElementById("step-number");
   if (stepNumEl) stepNumEl.textContent = String(step);
 
-  // Staggered animation for fields inside the active step
   const activeStep = document.querySelector(`.form-step[data-step="${step}"]`);
   if (activeStep) {
-    const fields = activeStep.querySelectorAll(".field");
-    fields.forEach((field, idx) => {
+    activeStep.querySelectorAll(".field").forEach((field, idx) => {
       field.classList.remove("visible");
       setTimeout(() => field.classList.add("visible"), idx * 180);
     });
   }
 
-  // Scroll panel into view (mobile)
-  const panel = document.getElementById("form-panel");
-  if (panel) {
-    panel.scrollIntoView({ behavior: "smooth", block: "start" });
-  }
+  document.getElementById("form-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 function nextStep() {
-  if (currentStep < totalSteps) {
-    showStep(currentStep + 1);
-  }
+  if (currentStep < totalSteps) showStep(currentStep + 1);
 }
 
 function prevStep() {
-  if (currentStep > 1) {
-    showStep(currentStep - 1);
-  }
+  if (currentStep > 1) showStep(currentStep - 1);
 }
 
-/* ------------ SCROLL HELPERS ------------ */
+// ============================================================
+// SCROLL HELPERS
+// ============================================================
 function scrollToForm() {
-  const panel = document.getElementById("form-panel");
-  if (panel) {
-    panel.scrollIntoView({ behavior: "smooth", block: "start" });
-  }
+  document.getElementById("form-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 function scrollToResults() {
-  const section = document.getElementById("results");
-  if (section) {
-    section.scrollIntoView({ behavior: "smooth", block: "start" });
-  }
+  document.getElementById("results")?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
-/* ------------ SKELETON SHIMMER UI ------------ */
+// ============================================================
+// SKELETON
+// ============================================================
 function createSkeletonHTML(count) {
   let html = "";
   for (let i = 0; i < count; i++) {
     html += `
       <div class="skeleton-card">
+        <div class="skeleton-poster"></div>
         <div class="skeleton-lines">
           <div class="skeleton-line" style="width:70%;"></div>
-          <div class="skeleton-line" style="width:55%;"></div>
+          <div class="skeleton-line" style="width:45%;"></div>
           <div class="skeleton-line" style="width:90%;"></div>
+          <div class="skeleton-line" style="width:80%;"></div>
         </div>
-      </div>
-    `;
+      </div>`;
   }
   return html;
 }
 
-/* ------------ GROQ BACKEND CALL (Netlify Function) ------------ */
+// ============================================================
+// GENERATE MOVIES
+// ============================================================
 async function generateMovies() {
-  // Helper to get selected chip values
   const getSelectedList = (id) => {
     const container = document.getElementById(id);
     if (!container) return [];
@@ -180,34 +449,24 @@ async function generateMovies() {
     age: ageList[0] || null,
   };
 
-  // Update summary pills above results
   const summary = document.getElementById("query-summary");
   if (summary) {
     summary.innerHTML = `
-      <span class="query-pill">Lang: ${
-        languages.length ? languages.join(", ") : "any"
-      }</span>
-      <span class="query-pill">Genres: ${
-        genres.length ? genres.join(", ") : "any"
-      }</span>
+      <span class="query-pill">Lang: ${languages.length ? languages.join(", ") : "any"}</span>
+      <span class="query-pill">Genres: ${genres.length ? genres.join(", ") : "any"}</span>
       <span class="query-pill">Mood: ${payload.mood || "any"}</span>
-      <span class="query-pill">Age: ${payload.age || "any"}</span>
-    `;
+      <span class="query-pill">Age: ${payload.age || "any"}</span>`;
   }
 
   const movieList = document.getElementById("movieList");
   if (!movieList) return;
 
-  // Show skeleton loaders while waiting
-  movieList.innerHTML = createSkeletonHTML(3);
+  movieList.innerHTML = createSkeletonHTML(5);
+  scrollToResults();
 
   try {
-    // Decide which URL to call:
-    // - Netlify site or Netlify Dev (localhost:8888): use relative path
-    // - Static local preview (127.0.0.1:5500 etc.): call the deployed backend
     const isNetlifyEnv =
       location.hostname.endsWith("netlify.app") || location.port === "8888";
-
     const endpoint = isNetlifyEnv
       ? "/.netlify/functions/recommend"
       : "https://filmfuseai.netlify.app/.netlify/functions/recommend";
@@ -231,48 +490,22 @@ async function generateMovies() {
       return;
     }
 
-    // Render movie cards
     movieList.innerHTML = "";
 
-for (const movie of movies) {
-  const details = await getMovieDetails(movie.title);
+    for (const movie of movies) {
+      const details = await getMovieDetails(movie.title);
 
-  const poster = details?.poster_path
-    ? `https://image.tmdb.org/t/p/w500${details.poster_path}`
-    : "";
+      // Attach TMDB data to the movie object so we can save it properly
+      movie.poster = details?.poster_path
+        ? `https://image.tmdb.org/t/p/w500${details.poster_path}`
+        : "";
+      movie.rating = details?.vote_average
+        ? details.vote_average.toFixed(1)
+        : "N/A";
 
-  const rating = details?.vote_average
-    ? details.vote_average.toFixed(1)
-    : "N/A";
-
-  const card = document.createElement("div");
-  card.className = "movie-card";
-
-  card.innerHTML = `
-    <div class="movie-poster">
-      ${poster ? `<img src="${poster}" />` : "No Image"}
-    </div>
-
-    <div class="movie-content">
-      <div class="movie-title">
-        ${movie.title} (${movie.year})
-      </div>
-
-      <div class="movie-meta">
-        ⭐ ${rating} / 10
-      </div>
-
-      <div class="movie-desc">
-        ${movie.short_reason}
-      </div>
-    </div>
-  `;
-
-  movieList.appendChild(card);
-}
-    
-
-    scrollToResults();
+      const card = buildMovieCard(movie, false);
+      movieList.appendChild(card);
+    }
   } catch (err) {
     console.error("Error in generateMovies:", err);
     movieList.innerHTML = `<p class="placeholder" style="color:#ef4444;">Error: ${
@@ -281,9 +514,19 @@ for (const movie of movies) {
   }
 }
 
-/* ------------ EXPOSE FUNCTIONS TO HTML (onclick) ------------ */
+// ============================================================
+// EXPOSE GLOBALS
+// ============================================================
 window.scrollToForm = scrollToForm;
 window.scrollToResults = scrollToResults;
 window.nextStep = nextStep;
 window.prevStep = prevStep;
 window.generateMovies = generateMovies;
+window.openAuthModal = openAuthModal;
+window.closeAuthModal = closeAuthModal;
+window.switchAuthTab = switchAuthTab;
+window.handleLogin = handleLogin;
+window.handleSignup = handleSignup;
+window.handleForgotPassword = handleForgotPassword;
+window.handleLogout = handleLogout;
+window.clearWishlist = clearWishlist;

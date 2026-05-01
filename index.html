@@ -4,10 +4,47 @@
   <meta charset="UTF-8" />
   <title>FilmFuseAI — Smart Movie Picker</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-
   <link rel="stylesheet" href="styles.css" />
+  <!-- Netlify Identity Widget -->
+  <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
 </head>
 <body data-theme="dark">
+
+  <!-- AUTH MODAL -->
+  <div id="auth-modal" class="auth-modal hidden">
+    <div class="auth-modal-backdrop" onclick="closeAuthModal()"></div>
+    <div class="auth-modal-box">
+      <button class="auth-modal-close" onclick="closeAuthModal()">✕</button>
+      <div class="auth-modal-logo">F</div>
+      <h2 class="auth-modal-title">Sign in to FilmFuseAI</h2>
+      <p class="auth-modal-sub">Save your watchlist and bookmark movies you love.</p>
+
+      <div class="auth-tabs">
+        <button class="auth-tab active" id="tab-login" onclick="switchAuthTab('login')">Sign in</button>
+        <button class="auth-tab" id="tab-signup" onclick="switchAuthTab('signup')">Create account</button>
+      </div>
+
+      <!-- Login form -->
+      <div id="auth-login" class="auth-form active">
+        <input type="email" id="login-email" class="auth-input" placeholder="Email" autocomplete="email" />
+        <input type="password" id="login-password" class="auth-input" placeholder="Password" autocomplete="current-password" />
+        <button class="btn btn-primary btn-full" onclick="handleLogin()">Sign in</button>
+        <button class="btn-text-link" onclick="handleForgotPassword()">Forgot password?</button>
+      </div>
+
+      <!-- Signup form -->
+      <div id="auth-signup" class="auth-form">
+        <input type="text" id="signup-name" class="auth-input" placeholder="Full name" autocomplete="name" />
+        <input type="email" id="signup-email" class="auth-input" placeholder="Email" autocomplete="email" />
+        <input type="password" id="signup-password" class="auth-input" placeholder="Password (min 8 chars)" autocomplete="new-password" />
+        <button class="btn btn-primary btn-full" onclick="handleSignup()">Create account</button>
+      </div>
+
+      <p id="auth-error" class="auth-error hidden"></p>
+      <p id="auth-message" class="auth-message hidden"></p>
+    </div>
+  </div>
+
   <!-- NAV -->
   <header>
     <nav class="nav">
@@ -24,10 +61,22 @@
           <a href="#hero">Home</a>
           <a href="#form-panel">Preferences</a>
           <a href="#results">Results</a>
+          <a href="#wishlist" id="wishlist-nav-link" class="hidden">Wishlist</a>
         </div>
-        <button id="theme-toggle" class="theme-toggle" aria-label="Toggle theme">
-          🌙
+
+        <!-- Logged-out state -->
+        <button id="auth-btn-login" class="btn btn-ghost" style="font-size:13px;padding:6px 14px;" onclick="openAuthModal()">
+          Sign in
         </button>
+
+        <!-- Logged-in state (hidden by default) -->
+        <div id="user-pill" class="user-pill hidden">
+          <div id="user-avatar" class="user-avatar">?</div>
+          <span id="user-name" class="user-name-label"></span>
+          <button class="user-pill-logout" onclick="handleLogout()" title="Sign out">↩</button>
+        </div>
+
+        <button id="theme-toggle" class="theme-toggle" aria-label="Toggle theme">🌙</button>
       </div>
     </nav>
   </header>
@@ -39,7 +88,7 @@
       <h1 class="hero-title">AI that actually picks what you want to watch.</h1>
       <p class="hero-lead">
         FilmFuseAI fuses your language, genre, mood and age preferences into a focussed,
-        binge-ready watchlist in a few seconds — powered by Groq’s Llama&nbsp;3.1.
+        binge-ready watchlist in a few seconds — powered by Groq's Llama&nbsp;3.1.
       </p>
 
       <div class="hero-actions">
@@ -96,7 +145,6 @@
             <div class="chip">Any</div>
           </div>
         </div>
-
         <div class="step-actions">
           <button class="btn btn-primary btn-full" onclick="nextStep()">Next</button>
         </div>
@@ -106,7 +154,7 @@
       <div class="form-step" data-step="2">
         <div class="field">
           <div class="field-title">Genres</div>
-          <p class="field-sub">Pick a couple you’re in the mood for.</p>
+          <p class="field-sub">Pick a couple you're in the mood for.</p>
           <div class="options" id="genres">
             <div class="chip">Action</div>
             <div class="chip">Sci-Fi</div>
@@ -120,7 +168,6 @@
             <div class="chip">Documentary</div>
           </div>
         </div>
-
         <div class="step-actions two">
           <button class="btn btn-ghost" onclick="prevStep()">Back</button>
           <button class="btn btn-primary" onclick="nextStep()">Next</button>
@@ -140,7 +187,6 @@
             <div class="chip">Emotional</div>
           </div>
         </div>
-
         <div class="step-actions two">
           <button class="btn btn-ghost" onclick="prevStep()">Back</button>
           <button class="btn btn-primary" onclick="nextStep()">Next</button>
@@ -151,7 +197,7 @@
       <div class="form-step" data-step="4">
         <div class="field">
           <div class="field-title">Age rating</div>
-          <p class="field-sub">We’ll keep recommendations near this rating.</p>
+          <p class="field-sub">We'll keep recommendations near this rating.</p>
           <div class="options single-select" id="age">
             <div class="chip">All</div>
             <div class="chip">13+</div>
@@ -159,13 +205,12 @@
             <div class="chip">18+</div>
           </div>
         </div>
-
         <div class="step-actions two">
           <button class="btn btn-ghost" onclick="prevStep()">Back</button>
           <button class="btn btn-primary" onclick="generateMovies()">Generate movies</button>
         </div>
         <p class="panel-footnote">
-          We only send these preferences to your own backend.
+          Sign in to bookmark movies to your wishlist.
         </p>
       </div>
     </aside>
@@ -176,17 +221,26 @@
     <div class="results-header">
       <div>
         <h2 class="results-title">Your AI-picked watchlist</h2>
-        <p class="results-sub">
-          This updates every time you generate. Reroll as many times as you like.
-        </p>
+        <p class="results-sub">This updates every time you generate. Reroll as many times as you like.</p>
       </div>
-      <div id="query-summary" class="query-summary">
-        <!-- Filled dynamically -->
-      </div>
+      <div id="query-summary" class="query-summary"></div>
     </div>
-
     <div id="movieList" class="movie-list">
       <p class="placeholder">Your recommendations will appear here.</p>
+    </div>
+  </section>
+
+  <!-- WISHLIST SECTION -->
+  <section id="wishlist" class="results wishlist-section hidden">
+    <div class="results-header">
+      <div>
+        <h2 class="results-title">⭐ My Wishlist</h2>
+        <p class="results-sub" id="wishlist-sub">Movies you've bookmarked.</p>
+      </div>
+      <button class="btn btn-ghost" style="font-size:12px;padding:6px 14px;" onclick="clearWishlist()">Clear all</button>
+    </div>
+    <div id="wishlistMovies" class="movie-list">
+      <p class="placeholder">Bookmark movies from your recommendations to see them here.</p>
     </div>
   </section>
 
